@@ -1,33 +1,103 @@
 import { useEffect, useState } from "react";
-import rigoImageUrl from "../assets/img/rigo-baby.jpg";
+import { Link } from "react-router-dom";
 import useGlobalReducer from "../hooks/useGlobalReducer.jsx";
 
 export const Home = () => {
-	const [planet,setPlanet]=useState(null)
-	useEffect(()=>{
-		const getPlanet = async()=>{
-			const response = await fetch("https://www.swapi.tech/api/planets/1/")
-			const data =  await response.json()
-			setPlanet(data.result.properties)
-			
-		}
-		getPlanet()
-		
-	},[])
-	
-  const {store, dispatch} =useGlobalReducer()
+  const [planets, setPlanets] = useState(null);
+  const [people, setPeople] = useState(null);
+  const [vehicles, setVehicles] = useState(null);
 
-	return (
-		<div className="text-center mt-5">
-			<h1>Home</h1>
-			<p>
-				{planet ?(
-				<p>Planet Name:{planet.name}</p>	
-				):(
-					<p>loading</p>
-				)}
-				
-			</p>
-		</div>
-	);
-}; 
+  const { store, dispatch } = useGlobalReducer();
+  const fallbackImage = "https://via.placeholder.com/300?text=Image+Not+Available";
+
+  const getIdFromUrl = (url) => url.split("/").filter(Boolean).pop();
+
+  const fetchAndSetDetails = async (endpoint, setter, limit = 5) => {
+    try {
+      const res = await fetch(`https://www.swapi.tech/api/${endpoint}/`);
+      const data = await res.json();
+      const items = data.results.slice(0, limit);
+      const details = [];
+
+      for (const item of items) {
+        const detailRes = await fetch(item.url);
+        const detailData = await detailRes.json();
+        details.push({ ...detailData.result.properties, url: item.url });
+      }
+
+      setter(details);
+    } catch (err) {
+      console.error(`Error fetching ${endpoint}:`, err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAndSetDetails("people", setPeople);
+    fetchAndSetDetails("vehicles", setVehicles);
+    fetchAndSetDetails("planets", setPlanets);
+  }, []);
+
+  const handleAddFavorite = (item, type) => {
+    const id = getIdFromUrl(item.url);
+    dispatch({
+      type: "ADD_TO_FAVORITES",
+      payload: {
+        id,
+        name: item.name,
+        type,
+      },
+    });
+  };
+
+  const CardComponent = ({ item, type }) => {
+    const id = getIdFromUrl(item.url);
+    const imageUrl = `https://starwars-visualguide.com/assets/img/${type}s/${id}.jpg`;
+
+    return (
+      <div className="card p-3" style={{ width: "300px" }}>
+        <img
+          src={imageUrl}
+          alt={item.name}
+          onError={(e) => (e.target.src = fallbackImage)}
+          style={{ width: "100%", height: "200px", objectFit: "cover" }}
+        />
+        <h5 className="mt-2">{item.name}</h5>
+        <div className="d-flex justify-content-between mt-2">
+          <Link to={`/${type}/${id}`} className="btn btn-primary btn-sm">
+            Learn More
+          </Link>
+          <button
+            className="btn btn-warning btn-sm"
+            onClick={() => handleAddFavorite(item, type)}
+          >
+            Favorite
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const Section = ({ title, data, type }) => (
+    <>
+      <h2 className="mt-5">{title}</h2>
+      {data ? (
+        <div className="d-flex flex-wrap justify-content-center gap-4">
+          {data.map((item, index) => (
+            <CardComponent key={index} item={item} type={type} />
+          ))}
+        </div>
+      ) : (
+        <p>Loading {title.toLowerCase()}...</p>
+      )}
+    </>
+  );
+
+  return (
+    <div className="text-center mt-5">
+      <h1>Star Wars Explorer</h1>
+      <Section title="Characters" data={people} type="character" />
+      <Section title="Vehicles" data={vehicles} type="vehicle" />
+      <Section title="Planets" data={planets} type="planet" />
+    </div>
+  );
+};
